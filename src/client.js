@@ -62,7 +62,8 @@ class Client extends EventEmitter {
       const serializerDirection = !this.isServer ? 'toServer' : 'toClient'
       e.field = [this.protocolState, serializerDirection].concat(parts).join('.')
       e.message = `Serialization error for ${e.field} : ${e.message}`
-      if (!this.compressor) { this.serializer.pipe(this.framer) } else { this.serializer.pipe(this.compressor) }
+      // Removed problematic re-piping:
+      // if (!this.compressor) { this.serializer.pipe(this.framer) } else { this.serializer.pipe(this.compressor) }
       this.emit('error', e)
     })
 
@@ -73,10 +74,23 @@ class Client extends EventEmitter {
         parts.shift()
       } else { parts = [] }
       const deserializerDirection = this.isServer ? 'toServer' : 'toClient'
-      e.field = [this.protocolState, deserializerDirection].concat(parts).join('.')
-      e.message = `Deserialization error for ${e.field} : ${e.message}`
-      if (!this.compressor) { this.splitter.pipe(this.deserializer) } else { this.decompressor.pipe(this.deserializer) }
-      this.emit('error', e)
+      const fieldPath = [this.protocolState, deserializerDirection].concat(parts).join('.')
+      const errorMessage = `Deserialization error for ${fieldPath} : ${e.message}`
+      
+      // Log the error to console.error
+      console.error(errorMessage)
+      if (e.buffer) { // protodef's FullPacketParser may attach the buffer
+        console.error('Offending buffer data:', e.buffer.toString('hex'));
+      }
+      if (e.stack) {
+        console.error(e.stack);
+      }
+
+      // Removed problematic re-piping:
+      // if (!this.compressor) { this.splitter.pipe(this.deserializer) } else { this.decompressor.pipe(this.deserializer) }
+      
+      // Do not emit 'error' further, effectively dropping the packet and allowing the client to continue.
+      // this.emit('error', e) // Original line, now commented out or removed.
     })
     this._mcBundle = []
     const emitPacket = (parsed) => {
